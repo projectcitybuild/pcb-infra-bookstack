@@ -1,0 +1,83 @@
+services:
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:26.09.3@sha256:42d8c8a5b74e2fd8613547ce14a1c011293765ceb3cd50ef4e751597b457798b
+    container_name: bookstack
+    restart: unless-stopped
+    depends_on:
+      bookstack-db:
+        condition: service_healthy
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Asia/Tokyo
+
+      APP_URL: ${BOOKSTACK_URL}
+      APP_KEY: ${BOOKSTACK_APP_KEY}
+
+      DB_HOST: bookstack-db
+      DB_PORT: "3306"
+      DB_DATABASE: bookstack
+      DB_USERNAME: bookstack
+      DB_PASSWORD: ${BOOKSTACK_DB_PASSWORD}
+
+      AUTH_METHOD: oidc
+      AUTH_AUTO_INITIATE: "false"
+
+      OIDC_NAME: PCB
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_ISSUER_DISCOVER: "true"
+      OIDC_CLIENT_ID: ${BOOKSTACK_OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${BOOKSTACK_OIDC_CLIENT_SECRET}
+
+      OIDC_EXTERNAL_ID_CLAIM: sub
+      OIDC_DISPLAY_NAME_CLAIMS: name
+      OIDC_EMAIL_ATTRIBUTE: email
+
+    volumes:
+      - bookstack-config:/config
+      - ./config/www/.env:/config/.env:ro
+
+    # For a host-based reverse proxy:
+    ports:
+      - "127.0.0.1:6876:80"
+
+    networks:
+      - bookstack
+      - proxy
+
+  bookstack-db:
+    image: mariadb:12.0.2@sha256:607835cd628b78e2876f6a586d0ec37b296c47683b31ef750002d3d17d3d8f7a
+    container_name: bookstack-db
+    restart: unless-stopped
+
+    environment:
+      MARIADB_DATABASE: bookstack
+      MARIADB_USER: bookstack
+      MARIADB_PASSWORD: ${BOOKSTACK_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${BOOKSTACK_DB_ROOT_PASSWORD}
+
+    volumes:
+      - bookstack-db-data:/var/lib/mysql
+
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - bookstack
+
+    # Intentionally no database host port exposed.
+
+networks:
+  bookstack:
+  proxy:
+    external: true
+    name: pcb-proxy
+
+volumes:
+  bookstack-config:
+  bookstack-db-data:
+
